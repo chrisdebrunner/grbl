@@ -179,7 +179,7 @@ ISR(TIMER1_COMPA_vect)
 		if (st.z_status == 1 || st.z_status == 2) new_stepping_port = new_stepping_port | (1<<Z_A_BIT);
 		if (st.z_status == 2 || st.z_status == 3) new_stepping_port = new_stepping_port | (1<<Z_B_BIT);
 	}
-	new_stepping_port = new_stepping_port^settings.invert_mask;
+	new_stepping_port = new_stepping_port^(HBRIDGE_STEPPING_MASK & settings.invert_mask);
 
 
   // Then pulse the stepping pins
@@ -392,6 +392,7 @@ void st_init()
   STEPPING_DDR |= HBRIDGE_STEPPING_MASK;
   //STEPPING_PORT = (STEPPING_PORT & ~STEPPING_MASK) | settings.invert_mask;
   STEPPERS_DISABLE_DDR |= 1<<STEPPERS_DISABLE_BIT;
+  STEPPING_PORT = (STEPPING_PORT & ~HBRIDGE_STEPPING_MASK) | (HBRIDGE_STEPPING_MASK & settings.invert_mask);
 
   // waveform generation = 0100 = CTC
   TCCR1B &= ~(1<<WGM13);

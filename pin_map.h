@@ -42,12 +42,12 @@
   #define Z_DIRECTION_BIT    7  // Uno Digital Pin 7
 
   // For H-bridge step configuration
-  #define X_A_BIT            6
-  #define X_B_BIT            7
-  #define Y_A_BIT            4
-  #define Y_B_BIT            5
-  #define Z_A_BIT            2
-  #define Z_B_BIT            3
+  #define X_A_BIT            7
+  #define X_B_BIT            6
+  #define Y_A_BIT            5
+  #define Y_B_BIT            4
+  #define Z_A_BIT            3
+  #define Z_B_BIT            2
 
 
   #define STEP_MASK ((1<<X_STEP_BIT)|(1<<Y_STEP_BIT)|(1<<Z_STEP_BIT)) // All step bits
