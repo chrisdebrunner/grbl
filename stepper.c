@@ -47,6 +47,12 @@ typedef struct {
                                               // pace without allocating a separate timer
   uint32_t trapezoid_adjusted_rate;      // The current rate of step_events according to the trapezoid generator
   uint32_t min_safe_rate;  // Minimum safe rate for full deceleration rate reduction step. Otherwise halves step_rate.
+
+  // For H-Bridge stepping control
+  uint8_t x_status,
+	      y_status,
+		  z_status;
+
 } stepper_t;
 
 static stepper_t st;
@@ -56,6 +62,7 @@ static block_t *current_block;  // A pointer to the block currently being traced
 static uint8_t step_pulse_time; // Step pulse reset time after step rise
 static uint8_t out_bits;        // The next stepping-bits to be output
 static volatile uint8_t busy;   // True when SIG_OUTPUT_COMPARE1A is being serviced. Used to avoid retriggering that handler.
+
 
 #if STEP_PULSE_DELAY > 0
   static uint8_t step_bits;  // Stores out_bits output to complete the step pulse delay
@@ -92,7 +99,7 @@ void st_wake_up()
   }
   if (sys.state == STATE_CYCLE) {
     // Initialize stepper output bits
-    out_bits = (0) ^ (settings.invert_mask); 
+    out_bits = 0; 
     // Initialize step pulse timing from settings. Here to ensure updating after re-writing.
     #ifdef STEP_PULSE_DELAY
       // Set total step pulse time after direction pin set. Ad hoc computation from oscilloscope.
@@ -148,13 +155,38 @@ ISR(TIMER1_COMPA_vect)
 {        
   if (busy) { return; } // The busy-flag is used to avoid reentering this interrupt
   
-  // Set the direction pins a couple of nanoseconds before we step the steppers
-  STEPPING_PORT = (STEPPING_PORT & ~DIRECTION_MASK) | (out_bits & DIRECTION_MASK);
+
+  
+	// Convert to H-bridge output
+
+	uint8_t new_stepping_port = STEPPING_PORT^settings.invert_mask;
+	if ((out_bits>>X_STEP_BIT) & 1) {
+		// Modulo-4 counter. Increase if x direction bit is true, decrease if false.
+		st.x_status = ((st.x_status+3)+2*((out_bits>>X_DIRECTION_BIT) & 1))%4;
+		new_stepping_port = new_stepping_port & (~((1<<X_A_BIT) | (1<<X_B_BIT)));
+		if (st.x_status == 1 || st.x_status == 2) new_stepping_port = new_stepping_port | (1<<X_A_BIT);
+		if (st.x_status == 2 || st.x_status == 3) new_stepping_port = new_stepping_port | (1<<X_B_BIT);
+	}
+	if ((out_bits>>Y_STEP_BIT) & 1) {
+		st.y_status = ((st.y_status+3)+2*((out_bits>>Y_DIRECTION_BIT) & 1))%4;
+		new_stepping_port = new_stepping_port & (~((1<<Y_A_BIT) | (1<<Y_B_BIT)));
+		if (st.y_status == 1 || st.y_status == 2) new_stepping_port = new_stepping_port | (1<<Y_A_BIT);
+		if (st.y_status == 2 || st.y_status == 3) new_stepping_port = new_stepping_port | (1<<Y_B_BIT);
+	}
+	if ((out_bits>>Z_STEP_BIT) & 1) {
+		st.z_status = ((st.z_status+3)+2*((out_bits>>Z_DIRECTION_BIT) & 1))%4;
+		new_stepping_port = new_stepping_port & (~((1<<Z_A_BIT) | (1<<Z_B_BIT)));
+		if (st.z_status == 1 || st.z_status == 2) new_stepping_port = new_stepping_port | (1<<Z_A_BIT);
+		if (st.z_status == 2 || st.z_status == 3) new_stepping_port = new_stepping_port | (1<<Z_B_BIT);
+	}
+	new_stepping_port = new_stepping_port^settings.invert_mask;
+
+
   // Then pulse the stepping pins
   #ifdef STEP_PULSE_DELAY
-    step_bits = (STEPPING_PORT & ~STEP_MASK) | out_bits; // Store out_bits to prevent overwriting.
+    step_bits = (STEPPING_PORT & ~HBRIDGE_STEPPING_MASK) | new_stepping_port; // Store out_bits to prevent overwriting.
   #else  // Normal operation
-    STEPPING_PORT = (STEPPING_PORT & ~STEP_MASK) | out_bits;
+    STEPPING_PORT = (STEPPING_PORT & ~HBRIDGE_STEPPING_MASK) | new_stepping_port;
   #endif
   // Enable step pulse reset timer so that The Stepper Port Reset Interrupt can reset the signal after
   // exactly settings.pulse_microseconds microseconds, independent of the main Timer1 prescaler.
@@ -308,7 +340,6 @@ ISR(TIMER1_COMPA_vect)
       plan_discard_current_block();
     }
   }
-  out_bits ^= settings.invert_mask;  // Apply step and direction invert mask    
   busy = false;
 }
 
@@ -321,7 +352,7 @@ ISR(TIMER1_COMPA_vect)
 ISR(TIMER2_OVF_vect)
 {
   // Reset stepping pins (leave the direction pins)
-  STEPPING_PORT = (STEPPING_PORT & ~STEP_MASK) | (settings.invert_mask & STEP_MASK); 
+  // STEPPING_PORT = (STEPPING_PORT & ~STEP_MASK) | (settings.invert_mask & STEP_MASK); 
   TCCR2B = 0; // Disable Timer2 to prevent re-entering this interrupt when it's not needed. 
 }
 
@@ -344,14 +375,22 @@ void st_reset()
   set_step_events_per_minute(MINIMUM_STEPS_PER_MINUTE);
   current_block = NULL;
   busy = false;
+
+  st.x_status = 0;
+  st.y_status = 0;
+  st.z_status = 0;
 }
 
 // Initialize and start the stepper motor subsystem
 void st_init()
 {
+  // Set STEPPING_PORT based on the values of x, y and z_status
+  
+
+
   // Configure directions of interface pins
-  STEPPING_DDR |= STEPPING_MASK;
-  STEPPING_PORT = (STEPPING_PORT & ~STEPPING_MASK) | settings.invert_mask;
+  STEPPING_DDR |= HBRIDGE_STEPPING_MASK;
+  //STEPPING_PORT = (STEPPING_PORT & ~STEPPING_MASK) | settings.invert_mask;
   STEPPERS_DISABLE_DDR |= 1<<STEPPERS_DISABLE_BIT;
 
   // waveform generation = 0100 = CTC

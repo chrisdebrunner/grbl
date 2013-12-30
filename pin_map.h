@@ -40,9 +40,20 @@
   #define X_DIRECTION_BIT    5  // Uno Digital Pin 5
   #define Y_DIRECTION_BIT    6  // Uno Digital Pin 6
   #define Z_DIRECTION_BIT    7  // Uno Digital Pin 7
+
+  // For H-bridge step configuration
+  #define X_A_BIT            6
+  #define X_B_BIT            7
+  #define Y_A_BIT            4
+  #define Y_B_BIT            5
+  #define Z_A_BIT            2
+  #define Z_B_BIT            3
+
+
   #define STEP_MASK ((1<<X_STEP_BIT)|(1<<Y_STEP_BIT)|(1<<Z_STEP_BIT)) // All step bits
   #define DIRECTION_MASK ((1<<X_DIRECTION_BIT)|(1<<Y_DIRECTION_BIT)|(1<<Z_DIRECTION_BIT)) // All direction bits
   #define STEPPING_MASK (STEP_MASK | DIRECTION_MASK) // All stepping-related bits (step/direction)
+  #define HBRIDGE_STEPPING_MASK ((1<<X_A_BIT)|(1<<X_B_BIT)|(1<<Y_A_BIT)|(1<<Y_B_BIT)|(1<<Z_A_BIT)|(1<<Z_B_BIT))
 
   #define STEPPERS_DISABLE_DDR    DDRB
   #define STEPPERS_DISABLE_PORT   PORTB
